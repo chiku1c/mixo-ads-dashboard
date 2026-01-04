@@ -1,4 +1,5 @@
 import { Campaign, ApiCampaignResponse, ApiResponse } from "../types/campaign";
+import { getCampaignInsights } from "./insights.service";
 
 // Validate environment variable
 const getBaseUrl = (): string => {
@@ -113,6 +114,74 @@ const transformCampaign = (campaign: ApiCampaignResponse): Campaign => {
   };
 };
 
+/**
+ * Get a single campaign by ID
+ */
+export const getCampaignById = async (id: string): Promise<Campaign> => {
+  try {
+    const response = await fetchWithTimeout(`${BASE_URL}/campaigns/${id}`, {
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const statusText = response.statusText || "Unknown error";
+      throw new Error(
+        `Failed to fetch campaign: ${response.status} ${statusText}`
+      );
+    }
+
+    const data: unknown = await response.json();
+
+    // Validate single campaign response
+    if (
+      !data ||
+      typeof data !== "object" ||
+      typeof (data as ApiCampaignResponse).id !== "string"
+    ) {
+      throw new Error(
+        "Invalid API response format: Expected a valid campaign object"
+      );
+    }
+
+    const campaign = data as ApiCampaignResponse;
+
+    // Try to fetch insights for this campaign
+    try {
+      const insights = await getCampaignInsights(id);
+      return {
+        ...campaign,
+        spend: insights.spend,
+        impressions: insights.impressions,
+        clicks: insights.clicks,
+      };
+    } catch {
+      // If insights fail, use calculated estimates
+      return transformCampaign(campaign);
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message.includes("timeout")) {
+        throw new Error(
+          "The server took too long to respond. Please check your connection and try again."
+        );
+      }
+      if (error.message.includes("fetch")) {
+        throw new Error(
+          "Unable to connect to the server. Please check your network connection and API configuration."
+        );
+      }
+      throw error;
+    }
+    throw new Error("An unexpected error occurred while fetching campaign");
+  }
+};
+
+/**
+ * Get all campaigns with their insights
+ */
 export const getCampaigns = async (): Promise<Campaign[]> => {
   try {
     const response = await fetchWithTimeout(`${BASE_URL}/campaigns`, {
@@ -139,8 +208,34 @@ export const getCampaigns = async (): Promise<Campaign[]> => {
 
     const campaigns = data.campaigns ?? [];
 
-    // Transform each campaign to include calculated metrics
-    return campaigns.map(transformCampaign);
+    // Fetch insights for all campaigns in parallel
+    const campaignsWithInsights = await Promise.allSettled(
+      campaigns.map(async (campaign) => {
+        try {
+          const insights = await getCampaignInsights(campaign.id);
+          return {
+            ...campaign,
+            spend: insights.spend,
+            impressions: insights.impressions,
+            clicks: insights.clicks,
+          };
+        } catch {
+          // If insights fail for a campaign, use calculated estimates
+          return transformCampaign(campaign);
+        }
+      })
+    );
+
+    // Map settled promises to campaigns
+    return campaignsWithInsights.map((result) => {
+      if (result.status === "fulfilled") {
+        return result.value;
+      } else {
+        // If the entire request failed, use the original campaign with calculated metrics
+        const index = campaignsWithInsights.indexOf(result);
+        return transformCampaign(campaigns[index]);
+      }
+    });
   } catch (error) {
     if (error instanceof Error) {
       // Re-throw with more context

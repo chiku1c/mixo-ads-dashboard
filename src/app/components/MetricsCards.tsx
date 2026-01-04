@@ -5,19 +5,25 @@ import {
   formatCurrency,
   formatNumber,
 } from "../../utils/format";
+import useInsights from "../../hooks/useInsights";
 
 interface Props {
   data: Campaign[];
 }
 
 export default function MetricsCards({ data }: Props) {
-  const totalSpend = data.reduce((sum, c) => sum + (c.spend || 0), 0);
-  const totalClicks = data.reduce((sum, c) => sum + (c.clicks || 0), 0);
-  const totalImpressions = data.reduce(
+  const { data: insights, loading: insightsLoading } = useInsights();
+
+  // Use real insights data if available, otherwise fallback to calculated values
+  const totalSpend = insights?.total_spend ?? data.reduce((sum, c) => sum + (c.spend || 0), 0);
+  const totalClicks = insights?.total_clicks ?? data.reduce((sum, c) => sum + (c.clicks || 0), 0);
+  const totalImpressions = insights?.total_impressions ?? data.reduce(
     (sum, c) => sum + (c.impressions || 0),
     0
   );
-  const avgCTR = totalImpressions > 0 
+  const avgCTR = insights?.average_ctr 
+    ? (insights.average_ctr * 100).toFixed(2)
+    : totalImpressions > 0 
     ? ((totalClicks / totalImpressions) * 100).toFixed(2)
     : "0.00";
 
