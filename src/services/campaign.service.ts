@@ -1,18 +1,16 @@
 import { Campaign, ApiCampaignResponse, ApiResponse } from "../types/campaign";
 import { getCampaignInsights } from "./insights.service";
 
-// Validate environment variable
+// Validate environment variable (lazy evaluation to avoid build-time errors)
 const getBaseUrl = (): string => {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE;
   if (!baseUrl) {
     throw new Error(
-      "NEXT_PUBLIC_API_BASE environment variable is not set. Please configure it in your .env file."
+      "NEXT_PUBLIC_API_BASE environment variable is not set. Please configure it in your .env file or Vercel environment variables."
     );
   }
   return baseUrl;
 };
-
-const BASE_URL = getBaseUrl();
 
 // API timeout in milliseconds (10 seconds)
 const API_TIMEOUT = 10000;
@@ -119,6 +117,7 @@ const transformCampaign = (campaign: ApiCampaignResponse): Campaign => {
  */
 export const getCampaignById = async (id: string): Promise<Campaign> => {
   try {
+    const BASE_URL = getBaseUrl();
     const response = await fetchWithTimeout(`${BASE_URL}/campaigns/${id}`, {
       cache: "no-store",
       headers: {
@@ -184,6 +183,7 @@ export const getCampaignById = async (id: string): Promise<Campaign> => {
  */
 export const getCampaigns = async (): Promise<Campaign[]> => {
   try {
+    const BASE_URL = getBaseUrl();
     const response = await fetchWithTimeout(`${BASE_URL}/campaigns`, {
       cache: "no-store",
       headers: {

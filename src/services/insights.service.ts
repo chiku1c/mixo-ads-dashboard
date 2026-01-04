@@ -4,18 +4,16 @@ import {
   AggregateInsightsResponse,
 } from "../types/insights";
 
-// Validate environment variable
+// Validate environment variable (lazy evaluation to avoid build-time errors)
 const getBaseUrl = (): string => {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE;
   if (!baseUrl) {
     throw new Error(
-      "NEXT_PUBLIC_API_BASE environment variable is not set. Please configure it in your .env file."
+      "NEXT_PUBLIC_API_BASE environment variable is not set. Please configure it in your .env file or Vercel environment variables."
     );
   }
   return baseUrl;
 };
-
-const BASE_URL = getBaseUrl();
 
 // API timeout in milliseconds (10 seconds)
 const API_TIMEOUT = 10000;
@@ -94,6 +92,7 @@ const validateCampaignInsights = (
  */
 export const getAggregateInsights = async (): Promise<AggregateInsights> => {
   try {
+    const BASE_URL = getBaseUrl();
     const response = await fetchWithTimeout(`${BASE_URL}/campaigns/insights`, {
       cache: "no-store",
       headers: {
@@ -142,6 +141,7 @@ export const getCampaignInsights = async (
   campaignId: string
 ): Promise<CampaignInsights> => {
   try {
+    const BASE_URL = getBaseUrl();
     const response = await fetchWithTimeout(
       `${BASE_URL}/campaigns/${campaignId}/insights`,
       {
@@ -195,6 +195,7 @@ export const streamCampaignInsights = (
   onMessage: (data: CampaignInsights) => void,
   onError?: (error: Event) => void
 ): EventSource => {
+  const BASE_URL = getBaseUrl();
   const eventSource = new EventSource(
     `${BASE_URL}/campaigns/${campaignId}/insights/stream`
   );
